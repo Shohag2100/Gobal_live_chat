@@ -50,13 +50,12 @@
     </style>
 </head>
 <body class="day">
-    <button class="mode-toggle" id="toggleBtn" onclick="toggleMode()">Moon</button>
+    <button class="mode-toggle" id="toggleBtn">Moon</button>
 
     <div class="container">
         <h1>Hey Champ!</h1>
         <p>Welcome to Real-Time Empire</p>
         <div>
-            <a href="/admin/"><button class="btn btn-primary">Admin Login</button></a>
             <button class="btn btn-chat" id="openLogin">Login</button>
             <button class="btn btn-primary" id="openRegister">Register</button>
         </div>
@@ -64,22 +63,31 @@
         <div id="forms" style="margin-top:30px; display:flex; gap:20px; justify-content:center;">
             <form id="registerForm" style="display:none; background:rgba(255,255,255,0.06); padding:18px; border-radius:12px;">
                 <h3 style="color:white; margin-bottom:8px;">Sign Up</h3>
-                <input id="reg_username" placeholder="Username" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
-                <input id="reg_password" type="password" placeholder="Password" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
+                <input id="reg_email" placeholder="Email address" style="padding:10px; width:260px; display:block; margin-bottom:8px;" />
+                <div class="field-error" id="reg_error_email" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
+                <input id="reg_username" placeholder="Username" style="padding:10px; width:260px; display:block; margin-bottom:8px;" />
+                <div class="field-error" id="reg_error_username" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
+                <input id="reg_fullname" placeholder="Full name" style="padding:10px; width:260px; display:block; margin-bottom:8px;" />
+                <div class="field-error" id="reg_error_full_name" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
+                <input id="reg_password" type="password" placeholder="Password" style="padding:10px; width:260px; display:block; margin-bottom:8px;" />
+                <div class="field-error" id="reg_error_password" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
+                <input id="reg_confirm" type="password" placeholder="Confirm password" style="padding:10px; width:260px; display:block; margin-bottom:8px;" />
+                <div class="field-error" id="reg_error_confirm" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
                 <button type="button" class="btn btn-primary" id="regSubmit">Create account</button>
                 <div id="regMsg" style="color:#ffdede; margin-top:8px;"></div>
             </form>
 
             <form id="loginForm" style="display:none; background:rgba(255,255,255,0.06); padding:18px; border-radius:12px;">
                 <h3 style="color:white; margin-bottom:8px;">Sign In</h3>
-                <input id="log_username" placeholder="Username" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
-                <input id="log_password" type="password" placeholder="Password" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
+                <input id="log_email" placeholder="Email address" style="padding:10px; width:260px; display:block; margin-bottom:4px;" />
+                <div class="field-error" id="log_error_email" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
+                <input id="log_password" type="password" placeholder="Password" style="padding:10px; width:260px; display:block; margin-bottom:8px;" />
+                <div class="field-error" id="log_error_password" style="color:#ffdede;font-size:0.9rem;margin-bottom:6px;"></div>
                 <button type="button" class="btn btn-chat" id="logSubmit">Sign in</button>
                 <div id="logMsg" style="color:#ffdede; margin-top:8px;"></div>
             </form>
-        </div>
+
         <p style="margin-top:60px; opacity:0.7;">© 2025 • Made with Love by Innocent Devil</p>
-    </div>
 
     <script>
         function toggleMode() {
@@ -87,8 +95,11 @@
             const btn = document.getElementById('toggleBtn');
             btn.innerHTML = document.body.classList.contains('night') ? 'Sun' : 'Moon';
         }
-    </script>
-    <script>
+
+        // attach toggle button handler
+        const toggleBtnEl = document.getElementById('toggleBtn');
+        toggleBtnEl.addEventListener('click', toggleMode);
+
         // Small JS to handle register/login flows via existing API endpoints
         const openLogin = document.getElementById('openLogin');
         const openRegister = document.getElementById('openRegister');
@@ -120,14 +131,36 @@
         }
 
         regSubmit.addEventListener('click', async () => {
+            // clear previous inline errors
             regMsg.textContent = '';
+            ['reg_error_email','reg_error_username','reg_error_full_name','reg_error_password','reg_error_confirm'].forEach(id=>{document.getElementById(id).textContent='';});
+
+            const email = document.getElementById('reg_email').value.trim();
             const username = document.getElementById('reg_username').value.trim();
+            const full_name = document.getElementById('reg_fullname').value.trim();
             const password = document.getElementById('reg_password').value.trim();
-            if (!username || !password) { regMsg.textContent = 'Both fields required'; return; }
-            const res = await postJson('/chat/api/register/', { username, password });
+            const confirm = document.getElementById('reg_confirm').value.trim();
+
+            if (!email || !username || !full_name || !password || !confirm) { regMsg.textContent = 'All fields required'; return; }
+            if (password !== confirm) { regMsg.textContent = 'Passwords do not match'; return; }
+
+            const res = await postJson('/chat/api/register/', { email, username, full_name, password, confirm_password: confirm });
             if (res.status === 200) {
-                // registered and logged in via view
                 window.location.href = '/chat/';
+                return;
+            }
+
+            // display field errors inline if provided
+            if (res.data && res.data.errors) {
+                const errs = res.data.errors;
+                if (errs.email) document.getElementById('reg_error_email').textContent = errs.email;
+                if (errs.username) document.getElementById('reg_error_username').textContent = errs.username;
+                if (errs.full_name) document.getElementById('reg_error_full_name').textContent = errs.full_name;
+                if (errs.password) document.getElementById('reg_error_password').textContent = errs.password;
+                if (errs.confirm_password) document.getElementById('reg_error_confirm').textContent = errs.confirm_password;
+                // also show other errors in the summary box
+                const other = Object.entries(errs).filter(([k])=>!['email','username','full_name','password','confirm_password'].includes(k)).map(([k,v])=>`${k}: ${v}`);
+                if (other.length) regMsg.innerHTML = other.join('<br>');
             } else {
                 regMsg.textContent = res.data.error || 'Registration failed';
             }
@@ -135,14 +168,20 @@
 
         logSubmit.addEventListener('click', async () => {
             logMsg.textContent = '';
-            const username = document.getElementById('log_username').value.trim();
+            const email = document.getElementById('log_email').value.trim();
             const password = document.getElementById('log_password').value.trim();
-            if (!username || !password) { logMsg.textContent = 'Both fields required'; return; }
-            const res = await postJson('/chat/api/login/', { username, password });
+            if (!email || !password) { logMsg.textContent = 'Both fields required'; return; }
+            const res = await postJson('/chat/api/login/', { email, password });
             if (res.status === 200) {
                 window.location.href = '/chat/';
             } else {
-                logMsg.textContent = res.data.error || 'Login failed';
+                // show inline login errors if present
+                if (res.data && res.data.errors) {
+                    if (res.data.errors.email) document.getElementById('log_error_email').textContent = res.data.errors.email;
+                    if (res.data.errors.password) document.getElementById('log_error_password').textContent = res.data.errors.password;
+                } else {
+                    logMsg.textContent = res.data.error || 'Login failed';
+                }
             }
         });
     </script>

@@ -8,6 +8,22 @@ from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 import json
+import socket
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
+# Try to use dnspython for MX lookups when available
+try:
+    from importlib import import_module
+    dns_pkg = import_module('dns')
+    try:
+        # ensure the resolver submodule is available
+        import_module('dns.resolver')
+        dns = dns_pkg
+    except Exception:
+        dns = None
+except Exception:
+    dns = None
 
 CustomUser = get_user_model()
 
@@ -22,25 +38,73 @@ def register_view(request):
     except Exception:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    # prefer email but accept username for compatibility
-    email = (data.get('email') or data.get('username'))
+    # Expect: email, full_name, username, password, confirm_password
+    email = (data.get('email') or '').strip()
+    full_name = (data.get('full_name') or '').strip()
+    username = (data.get('username') or '').strip()
     password = data.get('password')
+    confirm = data.get('confirm_password')
+    errors = {}
 
-    if not email or not password:
-        return JsonResponse({"error": "Email and password required"}, status=400)
+    # presence checks
+    if not email:
+        errors['email'] = 'Email is required'
+    if not username:
+        errors['username'] = 'Username is required'
+    if not full_name:
+        errors['full_name'] = 'Full name is required'
+    if not password:
+        errors['password'] = 'Password is required'
+    if not confirm:
+        errors['confirm_password'] = 'Confirm password is required'
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=400)
+
+    # password match
+    if password != confirm:
+        errors['confirm_password'] = 'Passwords do not match'
 
     # validate email format
     try:
         validate_email(email)
     except ValidationError:
-        return JsonResponse({"error": "Invalid email address"}, status=400)
+        errors['email'] = 'Invalid email address'
 
-    username = email
+    # basic domain existence check (MX then A record)
+    domain = email.split('@')[-1]
+    domain_ok = False
+    try:
+        if dns:
+            answers = dns.resolver.resolve(domain, 'MX')
+            if answers:
+                domain_ok = True
+    except Exception:
+        domain_ok = False
 
+    if not domain_ok:
+        try:
+            socket.gethostbyname(domain)
+            domain_ok = True
+        except Exception:
+            domain_ok = False
+
+    if not domain_ok:
+        errors['email'] = 'Email domain appears invalid or unreachable'
+
+    # uniqueness checks
     if CustomUser.objects.filter(username=username).exists():
-        return JsonResponse({"error": "Email already registered"}, status=400)
+        errors['username'] = 'Username already taken'
+    if CustomUser.objects.filter(email=email).exists():
+        errors['email'] = 'Email already registered'
+
+    if errors:
+        return JsonResponse({'errors': errors}, status=400)
 
     user = CustomUser.objects.create_user(username=username, email=email, password=password)
+    # store full name in first_name (or extend model for separate field later)
+    user.first_name = full_name
+    user.save()
     login(request, user)
     return JsonResponse({"success": True, "username": user.username})
 
@@ -55,13 +119,26 @@ def login_view(request):
     except Exception:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    identifier = data.get('email') or data.get('username')
+    identifier = (data.get('email') or data.get('username') or '').strip()
     password = data.get('password')
 
     if not identifier or not password:
         return JsonResponse({"error": "Email/username and password required"}, status=400)
 
+    # First, try direct authentication assuming identifier is username
     user = authenticate(request, username=identifier, password=password)
+
+    # If that fails and the identifier looks like an email, try to find the user
+    # by email and authenticate using their username. This allows logging in
+    # with either email or username.
+    if not user and '@' in identifier:
+        try:
+            possible = CustomUser.objects.filter(email__iexact=identifier).first()
+            if possible:
+                user = authenticate(request, username=possible.username, password=password)
+        except Exception:
+            user = None
+
     if user:
         login(request, user)
         return JsonResponse({"success": True, "username": user.username})
@@ -117,3 +194,43 @@ def upload_image(request):
     rel_url = settings.MEDIA_URL + filename
     abs_url = request.build_absolute_uri(rel_url)
     return JsonResponse({'image_url': abs_url})
+
+
+@csrf_exempt
+def remove_user(request):
+    """Admin-only: remove a user by username and broadcast a notice to the chat room.
+
+    POST JSON: { "username": "target" }
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=400)
+
+    if not getattr(request, 'user', None) or not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'error': 'forbidden'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    target = (data.get('username') or '').strip()
+    if not target:
+        return JsonResponse({'error': 'username required'}, status=400)
+
+    tup = CustomUser.objects.filter(username=target)
+    if not tup.exists():
+        return JsonResponse({'error': 'user not found'}, status=404)
+
+    # delete the user
+    tup.delete()
+
+    # broadcast a message to global_chat so clients see the removal
+    layer = get_channel_layer()
+    async_to_sync(layer.group_send)('global_chat', {
+        'type': 'chat_message',
+        'message': f'User {target} was removed by admin',
+        'image_url': None,
+        'username': '(admin)'
+    })
+
+    return JsonResponse({'success': True})

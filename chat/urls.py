@@ -9,4 +9,5 @@ urlpatterns = [
     path('api/me/', views.current_user),
     path('api/logout/', views.logout_view),
     path('api/upload_image/', views.upload_image),
+    path('api/remove_user/', views.remove_user),
 ]
