@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Innocent Devil • Real-Time Empire</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: all 1s ease;
+        }
+        body.night { background: #0f0f1a; }
+        .container { text-align: center; z-index: 10; }
+        h1 { font-size: 6rem; font-weight: 700; margin-bottom: 20px; }
+        p { font-size: 1.8rem; margin: 20px 0; opacity: 0.9; }
+        .btn {
+            padding: 18px 50px;
+            margin: 15px;
+            font-size: 1.5rem;
+            border: none;
+            border-radius: 60px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.4s;
+        }
+        .btn-primary { background: white; color: #667eea; }
+        .btn-primary:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        .btn-chat { background: #ff6b6b; color: white; }
+        .btn-chat:hover { background: #ff5252; transform: translateY(-10px); }
+        .mode-toggle {
+            position: absolute; top: 40px; right: 40px;
+            width: 70px; height: 70px; background: rgba(255,255,255,0.9);
+            border: 3px solid white; border-radius: 50%;
+            font-size: 2.4rem; color: #667eea;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: 0.6s; box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        .mode-toggle:hover { transform: rotate(360deg) scale(1.2); }
+        body.night .mode-toggle { background: rgba(20,20,50,0.9); color: white; }
+    </style>
+</head>
+<body class="day">
+    <button class="mode-toggle" id="toggleBtn" onclick="toggleMode()">Moon</button>
+
+    <div class="container">
+        <h1>Hey Champ!</h1>
+        <p>Welcome to Real-Time Empire</p>
+        <div>
+            <a href="/admin/"><button class="btn btn-primary">Admin Login</button></a>
+            <button class="btn btn-chat" id="openLogin">Login</button>
+            <button class="btn btn-primary" id="openRegister">Register</button>
+        </div>
+
+        <div id="forms" style="margin-top:30px; display:flex; gap:20px; justify-content:center;">
+            <form id="registerForm" style="display:none; background:rgba(255,255,255,0.06); padding:18px; border-radius:12px;">
+                <h3 style="color:white; margin-bottom:8px;">Sign Up</h3>
+                <input id="reg_username" placeholder="Username" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
+                <input id="reg_password" type="password" placeholder="Password" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
+                <button type="button" class="btn btn-primary" id="regSubmit">Create account</button>
+                <div id="regMsg" style="color:#ffdede; margin-top:8px;"></div>
+            </form>
+
+            <form id="loginForm" style="display:none; background:rgba(255,255,255,0.06); padding:18px; border-radius:12px;">
+                <h3 style="color:white; margin-bottom:8px;">Sign In</h3>
+                <input id="log_username" placeholder="Username" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
+                <input id="log_password" type="password" placeholder="Password" style="padding:10px; width:220px; display:block; margin-bottom:8px;" />
+                <button type="button" class="btn btn-chat" id="logSubmit">Sign in</button>
+                <div id="logMsg" style="color:#ffdede; margin-top:8px;"></div>
+            </form>
+        </div>
+        <p style="margin-top:60px; opacity:0.7;">© 2025 • Made with Love by Innocent Devil</p>
+    </div>
+
+    <script>
+        function toggleMode() {
+            document.body.classList.toggle('night');
+            const btn = document.getElementById('toggleBtn');
+            btn.innerHTML = document.body.classList.contains('night') ? 'Sun' : 'Moon';
+        }
+    </script>
+    <script>
+        // Small JS to handle register/login flows via existing API endpoints
+        const openLogin = document.getElementById('openLogin');
+        const openRegister = document.getElementById('openRegister');
+        const registerForm = document.getElementById('registerForm');
+        const loginForm = document.getElementById('loginForm');
+        const regSubmit = document.getElementById('regSubmit');
+        const logSubmit = document.getElementById('logSubmit');
+        const regMsg = document.getElementById('regMsg');
+        const logMsg = document.getElementById('logMsg');
+
+        openLogin.addEventListener('click', () => {
+            loginForm.style.display = loginForm.style.display === 'none' ? 'block' : 'none';
+            registerForm.style.display = 'none';
+        });
+        openRegister.addEventListener('click', () => {
+            registerForm.style.display = registerForm.style.display === 'none' ? 'block' : 'none';
+            loginForm.style.display = 'none';
+        });
+
+        async function postJson(url, body) {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json().catch(() => ({}));
+            return { status: resp.status, data };
+        }
+
+        regSubmit.addEventListener('click', async () => {
+            regMsg.textContent = '';
+            const username = document.getElementById('reg_username').value.trim();
+            const password = document.getElementById('reg_password').value.trim();
+            if (!username || !password) { regMsg.textContent = 'Both fields required'; return; }
+            const res = await postJson('/chat/api/register/', { username, password });
+            if (res.status === 200) {
+                // registered and logged in via view
+                window.location.href = '/chat/';
+            } else {
+                regMsg.textContent = res.data.error || 'Registration failed';
+            }
+        });
+
+        logSubmit.addEventListener('click', async () => {
+            logMsg.textContent = '';
+            const username = document.getElementById('log_username').value.trim();
+            const password = document.getElementById('log_password').value.trim();
+            if (!username || !password) { logMsg.textContent = 'Both fields required'; return; }
+            const res = await postJson('/chat/api/login/', { username, password });
+            if (res.status === 200) {
+                window.location.href = '/chat/';
+            } else {
+                logMsg.textContent = res.data.error || 'Login failed';
+            }
+        });
+    </script>
+</body>
+</html>

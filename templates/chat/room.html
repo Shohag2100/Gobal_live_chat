@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Live Chat — Real-Time Empire</title>
+        <style>
+            :root{--bg:#0f1724;--panel:#0b1220;--accent:#7c5cff;--muted:#9aa4b2;--me:#1f8a70}
+            html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#071124 0,#081129 60%,#06101f 100%);color:#e6eef6}
+            .app{display:flex;height:100vh;align-items:center;justify-content:center}
+            .chat-wrap{width:1100px;height:80vh;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;display:flex;overflow:hidden;box-shadow:0 20px 80px rgba(2,6,23,0.7)}
+            .sidebar{width:280px;background:linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0.005));padding:20px;display:flex;flex-direction:column;gap:18px}
+            .brand{font-weight:700;font-size:1.2rem;color:var(--accent)}
+            .user-box{display:flex;align-items:center;gap:12px}
+            .avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#ff7a9b);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}
+            .username{font-size:1rem}
+            .btn-logout{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--muted);cursor:pointer}
+            .users-list{flex:1;overflow:auto;padding-right:6px}
+            .users-list h4{margin:0 0 8px 0;color:var(--muted);font-weight:600}
+            .user-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;margin-bottom:6px;background:transparent}
+            .main{flex:1;display:flex;flex-direction:column}
+            .header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid rgba(255,255,255,0.02)}
+            .title{font-weight:700}
+            .messages{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+            .msg-row{display:flex;gap:10px;align-items:flex-end}
+            .bubble{max-width:70%;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,0.03);color:#eaf0ff}
+            .bubble.me{background:linear-gradient(90deg,var(--me),#22c2a1);color:#fff;border-bottom-right-radius:2px;margin-left:auto}
+            .meta{font-size:0.8rem;color:var(--muted);margin-top:6px}
+            .composer{display:flex;padding:14px;border-top:1px solid rgba(255,255,255,0.02);gap:10px}
+            .input{flex:1;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#eaf0ff}
+            .send{background:var(--accent);border:none;color:white;padding:10px 16px;border-radius:10px;cursor:pointer}
+            .placeholder{color:var(--muted)}
+        </style>
+    </head>
+    <body>
+        <div class="app">
+            <div class="chat-wrap">
+                <aside class="sidebar">
+                    <div class="brand">Real-Time Empire</div>
+                    <div class="user-box">
+                        <div class="avatar" id="avatar">U</div>
+                        <div>
+                            <div class="username" id="displayName">User</div>
+                            <div class="placeholder">Online</div>
+                        </div>
+                        <button class="btn-logout" id="logoutBtn">Logout</button>
+                    </div>
+                    <div class="users-list">
+                        <h4>Active</h4>
+                        <div id="activeUsers">--</div>
+                    </div>
+                </aside>
+
+                <section class="main">
+                    <div class="header">
+                        <div class="title">Global Chat Room</div>
+                        <div class="placeholder">Share your thoughts with everyone</div>
+                    </div>
+                    <div class="messages" id="messages"></div>
+                    <div class="composer">
+                        <button id="emojiBtn" title="Emoji" style="border-radius:8px;padding:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--muted);cursor:pointer;margin-right:6px">😊</button>
+                        <div id="emojiPicker" style="display:none;position:absolute;bottom:86px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);padding:8px;border-radius:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:50">
+                          <!-- small set of emojis -->
+                          <span class="emoji">😀</span><span class="emoji">😂</span><span class="emoji">😍</span><span class="emoji">😎</span><span class="emoji">😢</span>
+                          <span class="emoji">👍</span><span class="emoji">🎉</span><span class="emoji">🔥</span><span class="emoji">🌟</span><span class="emoji">🤝</span>
+                        </div>
+
+                        <textarea id="msgInput" class="input" rows="2" placeholder="Say something... (Enter to send)"></textarea>
+                        <input id="imageInput" type="file" accept="image/*" style="display:none" />
+                        <button id="uploadBtn" title="Attach image" style="border-radius:8px;padding:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--muted);cursor:pointer;margin-right:6px">📎</button>
+                        <button id="sendBtn" class="send">Send</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <script>
+            let username = null;
+            let ws = null;
+            const users = new Set();
+
+            function niceTime() { return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+            function addMessage(text, from, isMe){
+                const messages = document.getElementById('messages');
+                const row = document.createElement('div');
+                row.className = 'msg-row';
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble' + (isMe? ' me':'');
+                bubble.innerHTML = `<strong>${from}</strong><div style="margin-top:6px">${text}</div><div class='meta'>${niceTime()}</div>`;
+                if (isMe) { row.style.justifyContent='flex-end'; }
+                row.appendChild(bubble);
+                messages.appendChild(row);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            function renderActive(){
+                const el = document.getElementById('activeUsers');
+                el.innerHTML = '';
+                Array.from(users).sort().forEach(u => {
+                    const item = document.createElement('div');
+                    item.className = 'user-item';
+                    item.innerHTML = `<div style='width:36px;height:36px;border-radius:50%;background:linear-gradient(90deg,var(--accent),#ff7a9b);display:flex;align-items:center;justify-content:center;font-weight:700;margin-right:8px'>${u.charAt(0).toUpperCase()}</div><div>${u}</div>`;
+                    el.appendChild(item);
+                });
+            }
+
+            function connect(){
+                const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+                ws = new WebSocket(protocol + '://' + location.host + '/ws/chat/');
+                ws.onopen = ()=> console.log('ws open');
+                ws.onmessage = e => {
+                    const d = JSON.parse(e.data);
+                    users.add(d.username);
+                    renderActive();
+                    // If there's an image_url, render the image (with optional caption)
+                    if (d.image_url) {
+                        const caption = d.message || '';
+                        const messages = document.getElementById('messages');
+                        const row = document.createElement('div');
+                        row.className = 'msg-row';
+                        const bubble = document.createElement('div');
+                        bubble.className = 'bubble' + (d.username === username? ' me':'');
+                        const img = document.createElement('img');
+                        img.src = d.image_url;
+                        img.style.maxWidth = '320px';
+                        img.style.borderRadius = '10px';
+                        img.style.display = 'block';
+                        img.style.marginTop = '6px';
+                        bubble.innerHTML = `<strong>${d.username}</strong>` + (caption? `<div style="margin-top:6px">${caption}</div>` : '');
+                        bubble.appendChild(img);
+                        bubble.innerHTML += `<div class='meta'>${niceTime()}</div>`;
+                        if (d.username === username) { row.style.justifyContent='flex-end'; }
+                        row.appendChild(bubble);
+                        messages.appendChild(row);
+                        messages.scrollTop = messages.scrollHeight;
+                    } else {
+                        addMessage(d.message, d.username, d.username === username);
+                    }
+                };
+                ws.onclose = ()=> console.log('ws closed');
+            }
+
+            async function logout(){
+                await fetch('/chat/api/logout/', {method:'POST', credentials:'include'}).catch(()=>{});
+                window.location.href = '/';
+            }
+
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+
+            document.getElementById('sendBtn').addEventListener('click', ()=>{
+                const v = document.getElementById('msgInput').value.trim();
+                if (!v || !ws || ws.readyState !== WebSocket.OPEN) return;
+                ws.send(JSON.stringify({message: v}));
+                document.getElementById('msgInput').value = '';
+            });
+
+            // Emoji picker handling
+            const emojiBtn = document.getElementById('emojiBtn');
+            const emojiPicker = document.getElementById('emojiPicker');
+            emojiBtn.addEventListener('click', (e)=>{
+                emojiPicker.style.display = emojiPicker.style.display === 'none' ? 'flex' : 'none';
+            });
+            document.querySelectorAll('#emojiPicker .emoji').forEach(el=>{
+                el.addEventListener('click', ()=>{
+                    const ta = document.getElementById('msgInput');
+                    ta.value = ta.value + el.textContent;
+                    ta.focus();
+                    emojiPicker.style.display = 'none';
+                });
+            });
+
+            // Image upload handling
+            const uploadBtn = document.getElementById('uploadBtn');
+            const imageInput = document.getElementById('imageInput');
+            uploadBtn.addEventListener('click', ()=> imageInput.click());
+            imageInput.addEventListener('change', async (e)=>{
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                // upload via API
+                const fd = new FormData(); fd.append('image', file);
+                const resp = await fetch('/chat/api/upload_image/', { method: 'POST', body: fd, credentials: 'include' });
+                if (!resp.ok) { alert('Upload failed'); return; }
+                const data = await resp.json();
+                const caption = document.getElementById('msgInput').value.trim();
+                // send image message via websocket (image_url + optional caption)
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ image_url: data.image_url, message: caption }));
+                    document.getElementById('msgInput').value = '';
+                } else {
+                    alert('WebSocket not connected');
+                }
+            });
+
+            document.getElementById('msgInput').addEventListener('keydown', (e)=>{
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('sendBtn').click(); }
+            });
+
+            // fetch current user and initialize
+            fetch('/chat/api/me/', {credentials:'include'}).then(r=>{
+                if (r.status !== 200) throw new Error('not auth');
+                return r.json();
+            }).then(data=>{
+                username = data.username;
+                document.getElementById('displayName').textContent = username;
+                document.getElementById('avatar').textContent = username.charAt(0).toUpperCase();
+                users.add(username); renderActive(); connect();
+            }).catch(()=>{ window.location.href = '/'; });
+        </script>
+    </body>
+</html>
