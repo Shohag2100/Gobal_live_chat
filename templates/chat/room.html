@@ -46,7 +46,26 @@
             .meta{font-size:0.8rem;color:var(--muted);margin-top:6px}
             .composer{display:flex;padding:14px;border-top:1px solid rgba(255,255,255,0.02);gap:10px}
             .input{flex:1;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#eaf0ff}
-            .send{background:var(--accent);border:none;color:white;padding:10px 16px;border-radius:10px;cursor:pointer}
+            .send{background:var(--accent);border:none;color:white;padding:12px 18px;border-radius:12px;cursor:pointer}
+            /* Touch targets */
+            button, .emoji, .user-item { touch-action: manipulation; }
+
+            /* Mobile responsiveness */
+            @media (max-width: 900px) {
+                .chat-wrap{width:100%;height:100vh;border-radius:0;flex-direction:column}
+                .sidebar{width:100%;height:140px;order:2;display:none;overflow:auto;padding:12px}
+                .main{order:1;flex:1;display:flex;flex-direction:column}
+                .header{padding:12px}
+                .messages{padding:12px}
+                .composer{position:fixed;left:0;right:0;bottom:0;padding:12px;background:var(--panel);box-shadow:0 -6px 30px rgba(2,6,23,0.4);z-index:60}
+                .messages{padding-bottom:96px}
+                .avatar{width:40px;height:40px}
+                .brand{font-size:1rem}
+                .user-item{padding:10px}
+                #emojiPicker{left:0;right:0;bottom:56px;transform:none;max-width:100%;border-radius:12px}
+                #emojiPicker .emoji{font-size:24px;padding:10px}
+                #lightbox img{max-width:100%;max-height:100%}
+            }
             .placeholder{color:var(--muted)}
         </style>
     </head>
@@ -71,13 +90,14 @@
 
                 <section class="main">
                     <div class="header">
-                        <div style="display:flex;align-items:center;gap:12px">
-                          <div class="title">Global Chat Room</div>
-                          <div class="placeholder">Share your thoughts with everyone</div>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px">
-                            <button id="themeToggle" title="Toggle theme" style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer">🌙</button>
-                        </div>
+                                                <div style="display:flex;align-items:center;gap:12px">
+                                                    <button id="usersToggle" title="Show users" style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer">☰</button>
+                                                    <div class="title">Global Chat Room</div>
+                                                    <div class="placeholder">Share your thoughts with everyone</div>
+                                                </div>
+                                                <div style="display:flex;align-items:center;gap:8px">
+                                                        <button id="themeToggle" title="Toggle theme" style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer">🌙</button>
+                                                </div>
                     </div>
                     <div class="messages" id="messages"></div>
                     <div class="composer">
@@ -104,9 +124,26 @@
                         <textarea id="msgInput" class="input" rows="2" placeholder="Say something... (Enter to send)"></textarea>
                         <input id="imageInput" type="file" accept="image/*" style="display:none" />
                         <button id="uploadBtn" title="Attach image" style="border-radius:8px;padding:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--muted);cursor:pointer;margin-right:6px">📎</button>
-                        <button id="sendBtn" class="send">Send</button>
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+                            <div id="sendTarget" style="font-size:0.75rem;color:var(--muted);">Target: Global</div>
+                            <button id="sendBtn" class="send">Send</button>
+                        </div>
                     </div>
                 </section>
+            </div>
+        </div>
+
+        <!-- Private chat modal -->
+        <div id="privateChat" style="display:none;position:fixed;right:12px;bottom:86px;width:360px;max-width:90%;height:60vh;background:var(--panel);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.6);z-index:220;overflow:hidden;display:flex;flex-direction:column">
+            <div style="padding:10px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,0.03)">
+                <strong id="privateTitle">Private</strong>
+                <div style="flex:1"></div>
+                <button id="privateClose" style="background:transparent;border:none;color:var(--muted);cursor:pointer">✕</button>
+            </div>
+            <div id="privateMessages" style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px"></div>
+            <div style="padding:10px;border-top:1px solid rgba(255,255,255,0.03);display:flex;gap:8px;align-items:center">
+                <input id="privateInput" class="input" placeholder="Message privately..." style="flex:1" />
+                <button id="privateSend" class="send">Send</button>
             </div>
         </div>
 
@@ -158,7 +195,7 @@
                         item.className = 'user-item';
                         item.style.cursor = 'pointer';
                         item.innerHTML = `<div style='width:36px;height:36px;border-radius:50%;background:linear-gradient(90deg,var(--accent),#ff7a9b);display:flex;align-items:center;justify-content:center;font-weight:700;margin-right:8px'>${u.charAt(0).toUpperCase()}</div><div>${u}</div>`;
-                        item.addEventListener('click', ()=> mentionUser(u));
+                        item.addEventListener('click', ()=> openPrivateChat(u));
                         el.appendChild(item);
                 });
             }
@@ -169,10 +206,12 @@
                 ws.onopen = ()=> console.log('ws open');
                 ws.onmessage = e => {
                     const d = JSON.parse(e.data);
-                    users.add(d.username);
-                        renderActive();
+                    // register user for active list (global and private events include username)
+                    if (d.username) users.add(d.username);
+                    if (d.to) users.add(d.to);
+                    renderActive();
                     // If there's an image_url, render the image (with optional caption)
-                    if (d.image_url) {
+                    if (d.image_url && !d.private) {
                         const caption = d.message || '';
                         // highlight mentions in caption
                         const safeCap = caption ? caption.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
@@ -200,19 +239,43 @@
                         row.appendChild(bubble);
                         messages.appendChild(row);
                         messages.scrollTop = messages.scrollHeight;
+                    } else if (d.private) {
+                        // private message handling: deliver into the private modal if open, otherwise show a brief notification
+                        const pFrom = d.username;
+                        const pTo = d.to;
+                        const other = (pFrom === username) ? pTo : pFrom;
+                        // append to privateMessages if the modal is open for this other user
+                        const pmModal = document.getElementById('privateChat');
+                        const pmTarget = window.currentPrivateTarget || null;
+                        const pmList = document.getElementById('privateMessages');
+                        const row = document.createElement('div');
+                        row.className = 'msg-row';
+                        const bubble = document.createElement('div');
+                        bubble.className = 'bubble' + (d.username === username? ' me':'');
+                        const safe = d.message ? d.message.replace(/&/g, '&amp;').replace(/</g, '&lt;') : '';
+                        bubble.innerHTML = `<strong>${d.username}</strong><div style="margin-top:6px">${safe}</div><div class='meta'>${new Date(d.timestamp||Date.now()).toLocaleTimeString()}</div>`;
+                        row.appendChild(bubble);
+                        // if modal open and same chat, append; otherwise simple alert badge (minimal)
+                        if (pmModal.style.display === 'flex' && pmTarget === other) {
+                            pmList.appendChild(row);
+                            pmList.scrollTop = pmList.scrollHeight;
+                        } else {
+                            // small in-page notice: change document title briefly
+                            document.title = `New message from ${other}`;
+                            setTimeout(()=>{ document.title = 'Live Chat — Real-Time Empire'; }, 3000);
+                        }
                     } else {
-                            addMessage(d.message, d.username, d.username === username);
-                            // if this message contains mentions and mentions include me, mark it
-                            if (d.mentions && Array.isArray(d.mentions) && d.mentions.includes(username)){
-                                // find last message bubble and mark
-                                const msgs = document.getElementById('messages');
-                                const last = msgs.lastElementChild;
-                                if (last){
-                                    const bub = last.querySelector('.bubble');
-                                    if (bub) bub.classList.add('mentioned');
-                                }
-                                // optionally, you could play a sound or change title — keep minimal here
+                        addMessage(d.message, d.username, d.username === username);
+                        // if this message contains mentions and mentions include me, mark it
+                        if (d.mentions && Array.isArray(d.mentions) && d.mentions.includes(username)){
+                            // find last message bubble and mark
+                            const msgs = document.getElementById('messages');
+                            const last = msgs.lastElementChild;
+                            if (last){
+                                const bub = last.querySelector('.bubble');
+                                if (bub) bub.classList.add('mentioned');
                             }
+                        }
                     }
                 };
                 ws.onclose = ()=> console.log('ws closed');
@@ -225,12 +288,69 @@
 
             document.getElementById('logoutBtn').addEventListener('click', logout);
 
+            // Main composer always sends to the global room. Use the private modal
+            // input (below) to send 1-vs-1 messages so behavior is explicit.
             document.getElementById('sendBtn').addEventListener('click', ()=>{
                 const v = document.getElementById('msgInput').value.trim();
                 if (!v || !ws || ws.readyState !== WebSocket.OPEN) return;
                 ws.send(JSON.stringify({message: v}));
                 document.getElementById('msgInput').value = '';
             });
+
+            // Private chat helpers
+            window.currentPrivateTarget = null;
+
+            async function openPrivateChat(target){
+                if (!target || target === username) return;
+                window.currentPrivateTarget = target;
+                document.getElementById('privateTitle').textContent = `Chat — ${target}`;
+                // indicate main composer target remains Global
+                const tgt = document.getElementById('sendTarget');
+                if (tgt) tgt.textContent = 'Target: Global';
+                const modal = document.getElementById('privateChat');
+                const list = document.getElementById('privateMessages');
+                list.innerHTML = '';
+                modal.style.display = 'flex';
+                // fetch last messages
+                try{
+                    const resp = await fetch(`/chat/api/private_messages/?username=${encodeURIComponent(target)}`, {credentials:'include'});
+                    if (resp.ok){
+                        const data = await resp.json();
+                        (data.messages||[]).forEach(m=>{
+                            const row = document.createElement('div'); row.className='msg-row';
+                            const bubble = document.createElement('div'); bubble.className='bubble'+(m.sender===username?' me':'');
+                            bubble.innerHTML = `<strong>${m.sender}</strong><div style="margin-top:6px">${m.content||''}</div><div class='meta'>${new Date(m.timestamp).toLocaleTimeString()}</div>`;
+                            row.appendChild(bubble); list.appendChild(row);
+                        });
+                        list.scrollTop = list.scrollHeight;
+                    }
+                }catch(e){console.warn('private history failed',e)}
+                // inform server we want to join the private group (so further messages are delivered)
+                if (ws && ws.readyState === WebSocket.OPEN){
+                    ws.send(JSON.stringify({action:'join_private', to: target}));
+                }
+            }
+
+            function closePrivateChat(){
+                const target = window.currentPrivateTarget;
+                if (!target) return;
+                if (ws && ws.readyState === WebSocket.OPEN){
+                    ws.send(JSON.stringify({action:'leave_private', to: target}));
+                }
+                window.currentPrivateTarget = null;
+                document.getElementById('privateChat').style.display = 'none';
+                const tgt = document.getElementById('sendTarget');
+                if (tgt) tgt.textContent = 'Target: Global';
+            }
+
+            document.getElementById('privateClose').addEventListener('click', closePrivateChat);
+            document.getElementById('privateSend').addEventListener('click', ()=>{
+                const v = document.getElementById('privateInput').value.trim();
+                if (!v || !ws || ws.readyState !== WebSocket.OPEN || !window.currentPrivateTarget) return;
+                ws.send(JSON.stringify({action:'private_message', to: window.currentPrivateTarget, message: v}));
+                document.getElementById('privateInput').value = '';
+            });
+            document.getElementById('privateInput').addEventListener('keydown', (e)=>{ if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); document.getElementById('privateSend').click(); } });
 
             // Emoji picker handling
             const emojiBtn = document.getElementById('emojiBtn');
@@ -349,6 +469,34 @@
             document.getElementById('msgInput').addEventListener('keydown', (e)=>{
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('sendBtn').click(); }
             });
+
+            // Mobile: toggle users sidebar
+            const usersToggle = document.getElementById('usersToggle');
+            usersToggle && usersToggle.addEventListener('click', ()=>{
+                const sb = document.querySelector('.sidebar');
+                if (!sb) return;
+                if (getComputedStyle(sb).display === 'none') {
+                    sb.style.display = 'block';
+                } else {
+                    sb.style.display = 'none';
+                }
+            });
+
+            // Mobile emoji behavior: open full picker if narrow
+            emojiBtn.addEventListener('click', (e)=>{
+                const isMobile = window.matchMedia('(max-width:900px)').matches;
+                if (isMobile) {
+                    // show as block (full width) and scroll into view
+                    emojiPicker.style.display = 'flex';
+                    emojiPicker.scrollIntoView({behavior:'smooth',block:'center'});
+                } else {
+                    emojiPicker.style.display = emojiPicker.style.display === 'none' ? 'flex' : 'none';
+                }
+            });
+
+            // ensure composer is visible when input focused on mobile (avoid being covered by keyboard)
+            const msgInput = document.getElementById('msgInput');
+            msgInput.addEventListener('focus', ()=>{ if (window.matchMedia('(max-width:900px)').matches) window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); });
 
             // fetch current user and initialize
             // --- Theme initialization: apply saved theme or default to night ---

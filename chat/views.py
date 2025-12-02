@@ -11,6 +11,9 @@ import json
 import socket
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db.models import Q
+
+from .models import PrivateMessage
 
 # Try to use dnspython for MX lookups when available
 try:
@@ -234,3 +237,35 @@ def remove_user(request):
     })
 
     return JsonResponse({'success': True})
+
+
+def private_messages(request):
+    """Return recent private messages between the authenticated user and a target user.
+
+    Query params: `username` (preferred) or `user_id`.
+    """
+    user = getattr(request, 'user', None)
+    if not (user and user.is_authenticated):
+        return JsonResponse({'error': 'unauthorized'}, status=401)
+
+    target_name = request.GET.get('username')
+    target_id = request.GET.get('user_id')
+    target = None
+    if target_name:
+        try:
+            target = CustomUser.objects.get(username=target_name)
+        except CustomUser.DoesNotExist:
+            return JsonResponse({'error': 'target not found'}, status=404)
+    elif target_id:
+        try:
+            target = CustomUser.objects.get(id=int(target_id))
+        except Exception:
+            return JsonResponse({'error': 'target not found'}, status=404)
+    else:
+        return JsonResponse({'error': 'username or user_id required'}, status=400)
+
+    qs = PrivateMessage.objects.filter(
+        Q(sender=user, recipient=target) | Q(sender=target, recipient=user)
+    ).order_by('timestamp')[:200]
+
+    return JsonResponse({'messages': [m.to_dict() for m in qs]})
