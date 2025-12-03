@@ -50,7 +50,7 @@
     </style>
 </head>
 <body class="day">
-    <button class="mode-toggle" id="toggleBtn">Moon</button>
+    <button class="mode-toggle" id="toggleBtn">🌙</button>
 
     <div class="container">
         <h1>Hey Champ!</h1>
@@ -93,7 +93,8 @@
         function toggleMode() {
             document.body.classList.toggle('night');
             const btn = document.getElementById('toggleBtn');
-            btn.innerHTML = document.body.classList.contains('night') ? 'Sun' : 'Moon';
+            // Use the private chat icons: '☀️' for day, '🌙' for night
+            btn.textContent = document.body.classList.contains('night') ? '☀️' : '🌙';
         }
 
         // attach toggle button handler

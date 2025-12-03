@@ -1,0 +1,102 @@
+{
+  "info": {
+    "name": "Real-Time Empire - Chat API",
+    "_postman_id": "gobal-live-chat-collection",
+    "description": "Postman collection for Real-Time Empire (chat) - replace {{host}} with your server host (e.g. http://127.0.0.1:8000 or http://10.10.7.51:8001)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@example.com\",\n  \"username\": \"alice\",\n  \"full_name\": \"Alice Example\",\n  \"password\": \"secret\",\n  \"confirm_password\": \"secret\"\n}"
+        },
+        "url": { "raw": "{{host}}/chat/api/register/", "host": ["{{host}}"], "path": ["chat","api","register",""] }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"secret\"\n}"
+        },
+        "url": { "raw": "{{host}}/chat/api/login/", "host": ["{{host}}"], "path": ["chat","api","login",""] }
+      }
+    },
+    {
+      "name": "Get current user",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{host}}/chat/api/me/", "host": ["{{host}}"], "path": ["chat","api","me",""] }
+      }
+    },
+    {
+      "name": "CSRF token",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{host}}/chat/api/csrf/", "host": ["{{host}}"], "path": ["chat","api","csrf",""] }
+      }
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{host}}/chat/api/logout/", "host": ["{{host}}"], "path": ["chat","api","logout",""] }
+      }
+    },
+    {
+      "name": "Upload image",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "image", "type": "file", "src": "" }
+          ]
+        },
+        "url": { "raw": "{{host}}/chat/api/upload_image/", "host": ["{{host}}"], "path": ["chat","api","upload_image",""] }
+      }
+    },
+    {
+      "name": "Remove user (admin)",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"targetuser\"\n}"
+        },
+        "url": { "raw": "{{host}}/chat/api/remove_user/", "host": ["{{host}}"], "path": ["chat","api","remove_user",""] }
+      }
+    },
+    {
+      "name": "Private messages (history)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{host}}/chat/api/private_messages/?username=other", "host": ["{{host}}"], "path": ["chat","api","private_messages",""], "query": [{"key":"username","value":"other"}] }
+      }
+    },
+    {
+      "name": "Chat page (UI)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{host}}/chat/", "host": ["{{host}}"], "path": ["chat",""] }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "host", "value": "http://127.0.0.1:8000", "type": "string" }
+  ]
+}
